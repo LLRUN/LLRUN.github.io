@@ -189,7 +189,61 @@ p { margin: 0 0 1.1em; max-width: var(--measure); }
   max-width: var(--measure);
 }
 
+/* —— MLP 页：规格表 / 结果表 / 代码块 —— */
+.spec {
+  margin: 1.2rem 0 0;
+  max-width: 46rem;
+}
+.spec > div {
+  display: grid;
+  grid-template-columns: minmax(7rem, 11rem) 1fr;
+  gap: 1rem;
+  padding: 0.7rem 0;
+  box-shadow: 0 -1px 0 rgb(17 20 19 / 0.12);
+}
+.spec > div:first-child { box-shadow: none; }
+.spec dt { color: var(--ink-soft); }
+.spec dd { margin: 0; }
+
+.result {
+  width: 100%;
+  max-width: 46rem;
+  border-collapse: collapse;
+  margin: 1.4rem 0 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.result th,
+.result td {
+  text-align: left;
+  padding: 0.6rem 1rem 0.6rem 0;
+  box-shadow: 0 -1px 0 rgb(17 20 19 / 0.12);
+}
+.result thead th {
+  color: var(--ink-soft);
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.code {
+  margin: 1.4rem 0 0;
+  padding: 1.2rem 1.4rem;
+  max-width: 62rem;
+  background: var(--ink);
+  color: #e8eae7;
+  overflow-x: auto;
+  font-family: ui-monospace, Consolas, "Cascadia Code", "Courier New", monospace;
+  font-size: 0.86rem;
+  line-height: 1.62;
+  tab-size: 4;
+}
+.code code {
+  font: inherit;
+  white-space: pre;
+}
+
 @media (max-width: 30rem) {
   .bar { gap: 0.5rem; }
   .nav { gap: 1rem; }
+  .spec > div { grid-template-columns: 1fr; gap: 0.2rem; }
+  .code { font-size: 0.78rem; padding: 1rem; }
 }
