@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MLP 多层感知机 — LLRUN</title>
+<meta name="description" content="用 PyTorch 实现的多层感知机（MLP），在 MNIST 上训练并给出实测结果。">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip" href="#main">跳到主要内容</a>
+
+<header class="bar">
+  <a class="wordmark" href="index.html">LLRUN</a>
+  <nav class="nav" aria-label="主导航">
+    <a href="index.html">主页</a>
+    <a href="#code">代码</a>
+    <a href="code/mlp.py" download>下载 .py</a>
+  </nav>
+</header>
+
+<main id="main">
+
+  <section class="hero" id="top">
+    <h1 class="reveal">MLP 多层感知机</h1>
+    <p class="statement reveal">用 PyTorch 搭一个三层感知机，在 MNIST 手写数字集上训练到能认数字。</p>
+  </section>
+
+  <section class="work" id="spec">
+    <h2 class="reveal">结构与训练设置</h2>
+    <dl class="spec">
+      <div class="reveal"><dt>网络结构</dt><dd>784 → 256 → 128 → 10（隐藏层 ReLU + Dropout 0.2）</dd></div>
+      <div class="reveal"><dt>参数量</dt><dd>235,146</dd></div>
+      <div class="reveal"><dt>优化器 / 损失</dt><dd>Adam，lr 1e-3 / 交叉熵</dd></div>
+      <div class="reveal"><dt>训练轮数 / 批量</dt><dd>3 epoch，batch 128</dd></div>
+      <div class="reveal"><dt>数据</dt><dd>MNIST：60,000 训练 / 10,000 测试</dd></div>
+      <div class="reveal"><dt>运行设备</dt><dd>cuda / NVIDIA GeForce RTX 5060 Laptop GPU</dd></div>
+    </dl>
+  </section>
+
+  <section class="about" id="result">
+    <h2 class="reveal">实测结果</h2>
+    <p class="reveal">下面的数字不是我估的，是这台机器上真跑出来的（完整输出就是训练脚本打印的内容）。</p>
+    <table class="result reveal">
+      <thead>
+        <tr><th>epoch</th><th>train_loss</th><th>test_acc</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td>0.3243</td><td>95.77%</td></tr>
+        <tr><td>2</td><td>0.1400</td><td>97.27%</td></tr>
+        <tr><td>3</td><td>0.1036</td><td>97.59%</td></tr>
+      </tbody>
+    </table>
+    <p class="reveal">总耗时 30.5 秒（3 个 epoch，含数据加载）。准确率随轮数还在涨，加到 5~10 个 epoch 通常还能再高一些。</p>
+  </section>
+
+  <section class="about" id="code">
+    <h2 class="reveal">完整代码</h2>
+    <p class="reveal">单文件，装了 <code>torch</code> 与 <code>torchvision</code> 就能直接 <code>python mlp.py</code> 跑；首次运行会自动下载 MNIST。</p>
+    <p class="reveal"><a class="btn" href="code/mlp.py" download>下载 mlp.py</a></p>
+    <pre class="code reveal"><code>"""多层感知机（MLP）—— PyTorch 实现
+
+任务：MNIST 手写数字 10 分类
+结构：784 -&gt; 256 -&gt; 128 -&gt; 10（ReLU + Dropout）
+训练：Adam，交叉熵，3 个 epoch，batch 128
+
+运行：
+    python mlp.py
+首次运行会自动下载 MNIST 到 ./data。
+"""
+
+import time
+
+import torch
+from torch import nn
+from torch.utils.data import DataLoader
+from torchvision import datasets, transforms
+
+SEED = 0
+BATCH_SIZE = 128
+EPOCHS = 3
+LR = 1e-3
+DROP_OUT = 0.2
+
+
+class MLP(nn.Module):
+    """三层感知机：两个隐藏层 + 一个输出层。"""
+
+    def __init__(self, in_dim=784, hidden=(256, 128), n_class=10, p_drop=DROP_OUT):
+        super().__init__()
+        layers, prev = [], in_dim
+        for h in hidden:
+            layers += [nn.Linear(prev, h), nn.ReLU(), nn.Dropout(p_drop)]
+            prev = h
+        layers.append(nn.Linear(prev, n_class))  # 输出层不加激活，交给 CrossEntropyLoss
+        self.net = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.net(x.flatten(1))  # [N,1,28,28] -&gt; [N,784]
+
+
+def build_loaders(root="./data"):
+    tf = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,)),  # MNIST 的全局均值/标准差
+    ])
+    train_ds = datasets.MNIST(root, train=True, download=True, transform=tf)
+    test_ds = datasets.MNIST(root, train=False, download=True, transform=tf)
+    return (
+        DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True),
+        DataLoader(test_ds, batch_size=512),
+        len(train_ds),
+        len(test_ds),
+    )
+
+
+@torch.no_grad()
+def evaluate(model, loader, device):
+    model.eval()
+    correct = 0
+    for x, y in loader:
+        x, y = x.to(device), y.to(device)
+        correct += (model(x).argmax(dim=1) == y).sum().item()
+    return correct / len(loader.dataset)
+
+
+def main():
+    torch.manual_seed(SEED)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    train_dl, test_dl, n_train, n_test = build_loaders()
+
+    model = MLP().to(device)
+    n_param = sum(p.numel() for p in model.parameters())
+    print(f"device = {device}")
+    print(f"params = {n_param:,}")
+    print(f"train = {n_train}  test = {n_test}")
+
+    opt = torch.optim.Adam(model.parameters(), lr=LR)
+    loss_fn = nn.CrossEntropyLoss()
+    t0 = time.time()
+
+    for epoch in range(1, EPOCHS + 1):
+        model.train()
+        running = 0.0
+        for x, y in train_dl:
+            x, y = x.to(device), y.to(device)
+            opt.zero_grad()
+            loss = loss_fn(model(x), y)
+            loss.backward()
+            opt.step()
+            running += loss.item() * x.size(0)
+
+        train_loss = running / n_train
+        test_acc = evaluate(model, test_dl, device)
+        print(f"epoch {epoch}: train_loss={train_loss:.4f}  test_acc={test_acc * 100:.2f}%")
+
+    print(f"total_time = {time.time() - t0:.1f}s")
+
+
+if __name__ == "__main__":
+    main()
+</code></pre>
+  </section>
+
+  <section class="contact">
+    <p class="reveal"><a href="index.html">← 回到主页</a></p>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <p class="foot-name">LLRUN</p>
+  <p class="foot-note">© <span id="year">2026</span> · 由 GitHub Pages 托管</p>
+</footer>
+
+<script src="main.js" defer></script>
+</body>
+</html>
